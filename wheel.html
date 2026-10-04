@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>12格圆形转盘（按钮点击动效）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  background:#f5f5f5;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+}
+/* 上方按钮 */
+#shuffleBtn{
+  margin-bottom:20px;
+  padding:12px 24px;
+  font-size:16px;
+  border:none;
+  border-radius:99px;
+  background:#6633cc;
+  color:#fff;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+#wheelBox{
+  position:relative;
+  width:320px;
+  height:320px;
+  aspect-ratio:1/1;
+}
+#wheel{
+  width:100%;
+  height:100%;
+  border-radius:50%;
+  transition:transform 4s cubic-bezier(0.2,0,0.2,1);
+}
+#pointer{
+  position:absolute;
+  top:-2px;
+  left:50%;
+  transform:translateX(-50%);
+  width:0;
+  height:0;
+  border-left:14px solid transparent;
+  border-right:14px solid transparent;
+  border-top:26px solid #222;
+  z-index:5;
+}
+.btn-wrap{
+  margin-top:30px;
+  display:flex;
+  gap:16px;
+}
+button{
+  padding:12px 24px;
+  font-size:17px;
+  border:none;
+  border-radius:99px;
+  color:#fff;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+#startBtn{
+  background:#333;
+}
+#stopBtn{
+  background:#c82423;
+}
+#result{
+  margin-top:20px;
+  font-size:22px;
+  font-weight:bold;
+  color:#222;
+}
+/* 按钮点击缩放动画 */
+button:active{
+  transform: scale(0.94);
+  opacity:0.85;
+}
+</style>
+</head>
+<body>
+
+<!-- 新增：顶部打乱按钮 -->
+<button id="shuffleBtn">转盘绝对有问题!</button>
+
+<div id="wheelBox">
+  <div id="pointer"></div>
+  <svg id="wheel" viewBox="-110 -110 220 220">
+    <circle r="100" fill="#222"/>
+  </svg>
+</div>
+
+<div class="btn-wrap">
+  <button id="startBtn">开始旋转</button>
+  <button id="stopBtn">立即暂停</button>
+</div>
+<div id="result"></div>
+
+<script>
+const wheel = document.getElementById('wheel');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const shuffleBtn = document.getElementById('shuffleBtn');
+const resultBox = document.getElementById('result');
+
+const sliceCount = 12;
+const sliceAngle = 360 / sliceCount;
+const colors = [
+  '#ff6b6b','#4ecdc4','#ffe66d','#1a535c',
+  '#95e1d3','#f38181','#aa96da','#fcbad3',
+  '#84a98c','#e07a5f','#81b29a','#f2cc8f'
+];
+
+let numbers = [1,2,3,4,5,6,7,8,9,10,11,12];
+function shuffle(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// 渲染转盘函数：清空svg，重新绘制所有扇区+文字
+function renderWheel(){
+  // 保留最底层黑色圆，删除其余子元素
+  const bgCircle = wheel.firstChild;
+  wheel.innerHTML = '';
+  wheel.appendChild(bgCircle);
+
+  for(let i=0;i<sliceCount;i++){
+    const startAngle = i * sliceAngle;
+    const endAngle = startAngle + sliceAngle;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', describeSlice(0, 0, 100, startAngle, endAngle));
+    path.setAttribute('fill', colors[i]);
+    path.setAttribute('stroke','#222');
+    path.setAttribute('stroke-width','1');
+    wheel.appendChild(path);
+
+    const text = createText(0, 0, 65, startAngle + sliceAngle / 2, numbers[i]);
+    wheel.appendChild(text);
+  }
+}
+
+function polarToCartesian(r, angleDeg){
+  const a = (angleDeg - 90) * Math.PI / 180;
+  return {x: r * Math.cos(a), y: r * Math.sin(a)};
+}
+
+function describeSlice(cx, cy, r, startAngle, endAngle){
+  const start = polarToCartesian(r, endAngle);
+  const end = polarToCartesian(r, startAngle);
+  const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+  return [
+    'M', cx, cy,
+    'L', start.x, start.y,
+    'A', r, r, 0, largeArc, 0, end.x, end.y,
+    'Z'
+  ].join(' ');
+}
+
+function createText(cx, cy, r, angle, text){
+  const pos = polarToCartesian(r, angle);
+  const textEl = document.createElementNS('http://www.w3.org/2000/svg','text');
+  textEl.setAttribute('x', pos.x);
+  textEl.setAttribute('y', pos.y);
+  textEl.setAttribute('text-anchor','middle');
+  textEl.setAttribute('dominant-baseline','middle');
+  textEl.setAttribute('font-size','14');
+  textEl.setAttribute('font-weight','bold');
+  textEl.setAttribute('fill','#222');
+  textEl.textContent = text;
+  return textEl;
+}
+
+// 初始化渲染
+numbers = shuffle(numbers);
+renderWheel();
+
+let deg = 0;
+let spinning = false;
+let timer = null;
+
+startBtn.onclick = ()=>{
+  if(spinning) return;
+  spinning = true;
+  resultBox.textContent = '';
+  // 开启动画
+  wheel.style.transition = 'transform 4s cubic-bezier(0.2,0,0.2,1)';
+  const addDeg = 360 * (5 + Math.floor(Math.random()*4)) + Math.random()*360;
+  deg += addDeg;
+  wheel.style.transform = `rotate(${deg}deg)`;
+
+  timer = setTimeout(()=>{
+    stopSpin();
+  },4000);
+}
+
+function stopSpin(){
+  if(!spinning) return;
+  clearTimeout(timer);
+  // 移除transition，瞬间定格
+  wheel.style.transition = 'none';
+  spinning = false;
+  const finalAngle = ((360 - (deg % 360)) % 360 + 360) % 360;
+  const index = Math.min(sliceCount - 1, Math.floor(finalAngle / sliceAngle));
+  const result = numbers[index];
+  resultBox.textContent = `抽到数字：${result}`;
+}
+stopBtn.onclick = stopSpin;
+
+// 顶部打乱按钮事件
+shuffleBtn.onclick = ()=>{
+  // 旋转过程禁止打乱
+  if(spinning) return;
+  numbers = shuffle(numbers);
+  renderWheel();
+  resultBox.textContent = "已重新打乱编号！";
+}
+</script>
+
+</body>
+</html>
