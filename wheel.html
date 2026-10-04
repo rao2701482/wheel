@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>12格圆形转盘（修复音效）</title>
+<title>12格圆形转盘（可中途重新加速）</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{
@@ -169,17 +169,14 @@ let deg = 0;
 let spinning = false;
 let timer = null;
 
-// ========== Audio 修复版本 ==========
+// ========== Audio 音效 ==========
 let audioCtx = null;
 let spinSoundTimer = null;
 
-// 初始化音频（必须在点击事件内）
 function initAudio(){
   if(audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 }
-
-// 播放单次短促滴答声（转盘滚动的声音）
 function playTick(){
   if(!audioCtx || !spinning) return;
   const osc = audioCtx.createOscillator();
@@ -194,8 +191,6 @@ function playTick(){
   osc.start();
   osc.stop(audioCtx.currentTime + 0.02);
 }
-
-// 循环播放滴答模拟转盘转动
 function startSpinSound(){
   stopSpinSound();
   spinSoundTimer = setInterval(playTick, 70);
@@ -206,8 +201,6 @@ function stopSpinSound(){
     spinSoundTimer = null;
   }
 }
-
-// 结束叮声
 function playBellSound(){
   if(!audioCtx) return;
   const osc = audioCtx.createOscillator();
@@ -226,15 +219,20 @@ function playBellSound(){
 
 startBtn.onclick = ()=>{
   initAudio();
-  if(spinning) return;
+  // 【核心改动】不管是否正在旋转，直接重置新一轮旋转
   spinning = true;
   resultBox.textContent = '';
+  // 清除上一轮旧定时器
+  clearTimeout(timer);
+  // 恢复动画，重置4s旋转过渡
   wheel.style.transition = 'transform 4s cubic-bezier(0.2,0,0.2,1)';
+  // 叠加新的随机角度，重新获得旋转动能
   const addDeg = 360 * (5 + Math.floor(Math.random()*4)) + Math.random()*360;
   deg += addDeg;
   wheel.style.transform = `rotate(${deg}deg)`;
+  // 重置音效
   startSpinSound();
-
+  // 创建新的自动停止计时
   timer = setTimeout(()=>{
     stopSpin();
   },4000);
