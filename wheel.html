@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>12格圆形转盘（带旋转音效）</title>
+<title>12格圆形转盘（修复音效）</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{
@@ -15,7 +15,6 @@ body{
   background:#f5f5f5;
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
 }
-/* 上方按钮 */
 #shuffleBtn{
   margin-bottom:20px;
   padding:12px 24px;
@@ -75,7 +74,6 @@ button{
   font-weight:bold;
   color:#222;
 }
-/* 按钮点击缩放动画 */
 button:active{
   transform: scale(0.94);
   opacity:0.85;
@@ -124,12 +122,10 @@ function shuffle(arr){
   return a;
 }
 
-// 渲染转盘函数
 function renderWheel(){
   const bgCircle = wheel.firstChild;
   wheel.innerHTML = '';
   wheel.appendChild(bgCircle);
-
   for(let i=0;i<sliceCount;i++){
     const startAngle = i * sliceAngle;
     const endAngle = startAngle + sliceAngle;
@@ -139,29 +135,20 @@ function renderWheel(){
     path.setAttribute('stroke','#222');
     path.setAttribute('stroke-width','1');
     wheel.appendChild(path);
-
     const text = createText(0, 0, 65, startAngle + sliceAngle / 2, numbers[i]);
     wheel.appendChild(text);
   }
 }
-
 function polarToCartesian(r, angleDeg){
   const a = (angleDeg - 90) * Math.PI / 180;
   return {x: r * Math.cos(a), y: r * Math.sin(a)};
 }
-
 function describeSlice(cx, cy, r, startAngle, endAngle){
   const start = polarToCartesian(r, endAngle);
   const end = polarToCartesian(r, startAngle);
   const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
-  return [
-    'M', cx, cy,
-    'L', start.x, start.y,
-    'A', r, r, 0, largeArc, 0, end.x, end.y,
-    'Z'
-  ].join(' ');
+  return ['M', cx, cy,'L', start.x, start.y,'A', r, r, 0, largeArc, 0, end.x, end.y,'Z'].join(' ');
 }
-
 function createText(cx, cy, r, angle, text){
   const pos = polarToCartesian(r, angle);
   const textEl = document.createElementNS('http://www.w3.org/2000/svg','text');
@@ -175,7 +162,6 @@ function createText(cx, cy, r, angle, text){
   textEl.textContent = text;
   return textEl;
 }
-
 numbers = shuffle(numbers);
 renderWheel();
 
@@ -183,36 +169,45 @@ let deg = 0;
 let spinning = false;
 let timer = null;
 
-// ========= Web Audio 音效（iOS Safari兼容，点击初始化）=========
+// ========== Audio 修复版本 ==========
 let audioCtx = null;
-let noiseOsc = null;
-let noiseGain = null;
+let spinSoundTimer = null;
 
-// 初始化音频上下文（必须在用户点击里触发，ios要求）
+// 初始化音频（必须在点击事件内）
 function initAudio(){
   if(audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 }
-// 转盘滚动音效
+
+// 播放单次短促滴答声（转盘滚动的声音）
+function playTick(){
+  if(!audioCtx || !spinning) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = 600;
+  gain.gain.setValueAtTime(0, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.02);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.02);
+}
+
+// 循环播放滴答模拟转盘转动
 function startSpinSound(){
-  if(!audioCtx) return;
   stopSpinSound();
-  noiseOsc = audioCtx.createOscillator();
-  noiseGain = audioCtx.createGain();
-  noiseOsc.type = 'sawtooth';
-  noiseOsc.frequency.value = 1200;
-  noiseGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
-  noiseOsc.connect(noiseGain);
-  noiseGain.connect(audioCtx.destination);
-  noiseOsc.start();
+  spinSoundTimer = setInterval(playTick, 70);
 }
 function stopSpinSound(){
-  if(noiseOsc){
-    noiseOsc.stop();
-    noiseOsc = null;
+  if(spinSoundTimer){
+    clearInterval(spinSoundTimer);
+    spinSoundTimer = null;
   }
 }
-// 停止“叮”提示音
+
+// 结束叮声
 function playBellSound(){
   if(!audioCtx) return;
   const osc = audioCtx.createOscillator();
@@ -227,10 +222,10 @@ function playBellSound(){
   osc.start();
   osc.stop(audioCtx.currentTime + 0.45);
 }
-// =====================================================
+// =================================
 
 startBtn.onclick = ()=>{
-  initAudio(); // 第一次点击初始化音频
+  initAudio();
   if(spinning) return;
   spinning = true;
   resultBox.textContent = '';
@@ -238,7 +233,7 @@ startBtn.onclick = ()=>{
   const addDeg = 360 * (5 + Math.floor(Math.random()*4)) + Math.random()*360;
   deg += addDeg;
   wheel.style.transform = `rotate(${deg}deg)`;
-  startSpinSound(); //开启转动音效
+  startSpinSound();
 
   timer = setTimeout(()=>{
     stopSpin();
@@ -251,7 +246,7 @@ function stopSpin(){
   wheel.style.transition = 'none';
   spinning = false;
   stopSpinSound();
-  playBellSound(); //停止的叮声
+  playBellSound();
   const finalAngle = ((360 - (deg % 360)) % 360 + 360) % 360;
   const index = Math.min(sliceCount - 1, Math.floor(finalAngle / sliceAngle));
   const result = numbers[index];
